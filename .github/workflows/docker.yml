@@ -1,0 +1,118 @@
+name: Docker CI/CD
+
+# Se déclenche à chaque push (toutes les branches) et sur les Pull Requests vers main.
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DOCKERHUB_USER: nellotsuka
+  WEB_IMAGE: nellotsuka/docker-php-articles-web
+  DB_IMAGE: nellotsuka/docker-php-articles-db
+
+jobs:
+  # 1. Vérification de la syntaxe PHP avec la même version que l'image
+  lint:
+    name: Lint PHP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: php -l sur app/
+        run: |
+          docker run --rm -v "$PWD/app:/app:ro" php:8.2-cli \
+            sh -c 'for f in /app/*.php; do php -l "$f" || exit 1; done'
+
+  # 2. Construction des deux images et test de la stack complète
+  build-test:
+    name: Build et test de la stack
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fichier .env de test
+        run: cp .env.example .env
+
+      - name: Build et démarrage (attend que les healthchecks soient OK)
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      - name: État des conteneurs
+        run: docker compose ps
+
+      - name: La page d'accueil répond
+        run: curl -fsS http://localhost:8080/ | grep -q "<h1 class=\"mt-5\">Articles</h1>"
+
+      - name: Ajout d'un article et lecture depuis la base
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/validation.php \
+            -d "title=Article CI ${GITHUB_SHA::7}&author=GitHub Actions&content=Test automatique")
+          test "$code" = "302"
+          curl -fsS http://localhost:8080/ | grep -q "Article CI ${GITHUB_SHA::7}"
+
+      - name: Le conteneur web tourne en non-root
+        run: test "$(docker exec web id -u)" != "0"
+
+      - name: Logs en cas d'échec
+        if: failure()
+        run: docker compose logs
+
+      - name: Arrêt de la stack
+        if: always()
+        run: docker compose down -v
+
+  # 3. Publication sur Docker Hub, uniquement après un push sur main
+  publish:
+    name: Publication Docker Hub
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      HAS_DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - name: Secrets Docker Hub absents
+        if: env.HAS_DOCKERHUB_TOKEN != 'true'
+        run: echo "::warning::Secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN non configurés, publication ignorée."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+
+      - name: Tag court du commit
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+
+      - name: Connexion à Docker Hub (via les secrets du dépôt)
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build et push de l'image web (latest + SHA)
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web/Dockerfile
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ env.SHORT_SHA }}
+
+      - name: Build et push de l'image db (latest + SHA)
+        if: env.HAS_DOCKERHUB_TOKEN == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/db/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DB_IMAGE }}:latest
+            ${{ env.DB_IMAGE }}:${{ env.SHORT_SHA }}
