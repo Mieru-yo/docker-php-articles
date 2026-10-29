@@ -97,7 +97,7 @@ Défini dans le Dockerfile Web : requête HTTP sur `http://localhost/` (la page 
 |---|---|
 | `app/` (code PHP) | Jérémy |
 | `docker/web/` (Dockerfile Web et config Apache) | Jérémy |
-| `.dockerignore` | Jérémy |
+| `.dockerignore` | Jérémy (liste blanche : si l'image `db` a besoin d'un nouveau fichier, Yann demande à Jérémy de l'ajouter) |
 | `.github/workflows/` (CI/CD) | Jérémy |
 | `docs/rapport/2a-dockerfile-web.md`, `5-securite.md`, `6-optimisation.md`, `7a-ci-cd.md` | Jérémy |
 | `db/init/` (script SQL) | Yann |
@@ -106,7 +106,7 @@ Défini dans le Dockerfile Web : requête HTTP sur `http://localhost/` (la page 
 | `docs/architecture.*` (schéma) | Yann |
 | `README.md` | Yann |
 | `docs/rapport/1-architecture.md`, `2b-dockerfile-db.md`, `3-compose.md`, `4-reseaux.md`, `7b-docker-hub.md`, `8-tests.md` | Yann |
-| `docs/ORGANISATION.md` | Les deux (PR relue par l'autre) |
+| `docs/ORGANISATION.md` | Les deux (prévenir l'autre à chaque modification) |
 | `docs/rapport/rapport.md` (assemblage final) | Jérémy, en phase 4 |
 
 Les captures d'écran vont dans `docs/rapport/img/`, préfixées par le numéro de partie (ex. `3-persistance-avant.png`).
@@ -169,7 +169,7 @@ Les deux travaillent **en parallèle**. Les 🔒 indiquent une tâche bloquée p
    ```bash
    git push -u origin <branche-de-la-tâche>
    ```
-3. Ouvrir une **Pull Request** vers `main`. L'autre membre la relit **dans la journée** et l'approuve. Le relecteur ne pousse pas de commit sur la branche de l'autre : il commente.
+3. Ouvrir une **Pull Request** vers `main` et la fusionner soi-même (pas de relecture obligatoire). Prévenir l'autre membre après chaque fusion, surtout aux points de synchronisation A et B. On ne pousse jamais de commit sur la branche de l'autre.
 4. Personne ne pousse directement sur `main`.
 5. Chacun committe avec **son propre compte Git** (`git config user.email`).
 6. Après une fusion dans `main`, l'autre membre met sa branche à jour : `git pull origin main`.
