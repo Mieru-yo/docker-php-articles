@@ -1,4 +1,36 @@
 services:
+  web:
+    image: nellotsuka/docker-php-articles-web:latest
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    container_name: web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      DB_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/apache2
+      - /var/lock/apache2
+    cap_drop:
+      - ALL
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    security_opt:
+      - no-new-privileges:true
+
   db:
     image: nellotsuka/docker-php-articles-db:latest
     build:
