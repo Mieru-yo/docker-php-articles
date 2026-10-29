@@ -1,0 +1,7 @@
+# Contexte de build partagé par les images web et db (racine du dépôt).
+# Liste blanche : seuls les fichiers nécessaires aux images sont envoyés au daemon.
+*
+!app/
+!db/init/
+!docker/web/apache-security.conf
+!docker/web/php-security.ini
