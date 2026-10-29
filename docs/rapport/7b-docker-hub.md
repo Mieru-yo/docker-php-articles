@@ -50,4 +50,10 @@ Le tag `latest` et le tag `6c5b832` ont la même taille : ils désignent la mêm
 
 ## Captures
 
-Les captures d'écran des deux dépôts publics sont à placer dans `docs/rapport/img/` (`7b-web-hub.png`, `7b-db-hub.png`).
+Onglet *Tags* des deux dépôts publics, avec le tag `6c5b832` publié par `yannd0cker`, la plateforme `linux/amd64` et la taille compressée :
+
+![Dépôt nellotsuka/docker-php-articles-web](img/7b-web-hub.png)
+
+![Dépôt nellotsuka/docker-php-articles-db](img/7b-db-hub.png)
+
+Les tailles compressées (59,73 Mo et 227,22 Mo) correspondent à celles relevées par l'API ci-dessus.
