@@ -26,11 +26,11 @@ Ces valeurs sont fixées **dès maintenant** pour que chacun puisse travailler s
 
 | Image | Dockerfile | Contexte de build | Nom Docker Hub |
 |---|---|---|---|
-| Web (PHP 8.2 + Apache) | `docker/web/Dockerfile` | racine du dépôt (`.`) | `<DOCKERHUB_USER>/docker-php-articles-web` |
-| Base (MySQL 8.4) | `docker/db/Dockerfile` | racine du dépôt (`.`) | `<DOCKERHUB_USER>/docker-php-articles-db` |
+| Web (PHP 8.2 + Apache) | `docker/web/Dockerfile` | racine du dépôt (`.`) | `nellotsuka/docker-php-articles-web` |
+| Base (MySQL 8.4) | `docker/db/Dockerfile` | racine du dépôt (`.`) | `nellotsuka/docker-php-articles-db` |
 
 Tags publiés : `latest` et le SHA court du commit (ex. `a1b2c3d`).
-`<DOCKERHUB_USER>` : compte Docker Hub **à choisir avant la phase 3** (voir §6).
+Compte Docker Hub : **`nellotsuka`** (compte de Jérémy).
 
 ### Variables d'environnement
 
@@ -135,7 +135,7 @@ Les deux travaillent **en parallèle**. Les 🔒 indiquent une tâche bloquée p
 | 5 | **J4** `feat/web-optimisation` : taille de l'image avant / après, image de base plus légère ou multi-stage, `.dockerignore` affiné | 🔒 **Y4** `feat/network` : test de persistance (partie 3) + `docker network ls/inspect`, `ping db` depuis `web` (partie 4). *Bloqué par Y3 fin.* |
 | 6 | Sections rapport `5-securite.md`, `6-optimisation.md` | Sections rapport `1`, `2b`, `3`, `4` |
 
-**En attendant A, Yann :** Y1, Y2, Y3 (partie `db`), rédaction de `1-architecture.md` et `2b-dockerfile-db.md`, création du compte / des dépôts Docker Hub (§6).
+**En attendant A, Yann :** Y1, Y2, Y3 (partie `db`), rédaction de `1-architecture.md` et `2b-dockerfile-db.md`, création de son compte Docker Hub pour être ajouté comme collaborateur (§6).
 
 **➜ Point de synchronisation B :** J3, J4 et Y3 fusionnés (images et Compose définitifs).
 
@@ -205,10 +205,20 @@ Format : `type(portée): description courte`, en anglais.
 
 ---
 
-## 6. Décisions encore ouvertes
+## 6. Docker Hub et décisions encore ouvertes
+
+### Docker Hub (décidé)
+
+- Compte : **`nellotsuka`** (Jérémy).
+- Avant la phase 3, Jérémy :
+  1. crée les dépôts publics `docker-php-articles-web` et `docker-php-articles-db` ;
+  2. ajoute Yann comme collaborateur de ces dépôts (Yann doit avoir un compte Docker Hub), pour qu'il puisse faire la publication manuelle (Y5) avec son propre compte ;
+  3. crée un jeton d'accès Docker Hub (Account settings → Personal access tokens, droits *Read & Write*) et l'ajoute dans les secrets GitHub du dépôt : `DOCKERHUB_USERNAME` = `nellotsuka`, `DOCKERHUB_TOKEN` = le jeton. Cela débloque J5 (fin).
+
+### Décisions encore ouvertes
 
 | Question | À trancher avant | Proposition |
 |---|---|---|
-| Compte Docker Hub utilisé (`<DOCKERHUB_USER>`) | Phase 3 | Le propriétaire du compte crée un jeton d'accès Docker Hub ; Jérémy (admin du dépôt GitHub) l'ajoute dans les secrets `DOCKERHUB_USERNAME` et `DOCKERHUB_TOKEN`. |
+
 | Format de la démo (pas de soutenance orale) | Phase 4 | Demander à l'enseignant : vidéo courte de la stack, ou captures dans le rapport. |
 | Service `adminer` (optionnel) | Phase 2 | Yann l'ajoute au Compose s'il a le temps, sur le réseau `app-network`, port `8081`. |
