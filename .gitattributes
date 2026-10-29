@@ -1,0 +1,6 @@
+# Fins de ligne LF pour tout le texte (scripts et fichiers lus dans les conteneurs Linux)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.pdf binary

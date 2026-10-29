@@ -1,0 +1,11 @@
+# Secrets : ne jamais committer le vrai .env (seul .env.example est versionné)
+.env
+
+# Archives d'images Docker
+*.tar
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
