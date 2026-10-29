@@ -1,6 +1,7 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// Les erreurs sont journalisées (logs du conteneur) mais jamais affichées au visiteur.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
 require 'db-config.php';
@@ -10,7 +11,7 @@ function validate(PDO $PDO){
     if(!isset($_POST["title"]) || empty($_POST["title"])) {
         echo '<p style="color: red; font-weight: bold;">Il manque le titre de l\'article</p>';
     }
-    elseif(!isset($_POST["title"]) || empty($_POST["author"])) {
+    elseif(!isset($_POST["author"]) || empty($_POST["author"])) {
         echo '<p style="color: red; font-weight: bold;">Il manque le nom de l\'auteur de l\'article</p>';
     }
     elseif(!isset($_POST["content"]) || empty($_POST["content"])) {
@@ -21,7 +22,8 @@ function validate(PDO $PDO){
         $request->bindValue(":author", $_POST["author"]);
         $request->bindValue(":content", $_POST["content"]);
         $request->execute();
-        header('Location: index.php'); 
+        header('Location: index.php');
+        exit;
     }
 
     echo '<p><a href="index.php">accueil</a></p>';
