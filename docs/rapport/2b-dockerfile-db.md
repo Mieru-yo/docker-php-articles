@@ -4,9 +4,11 @@
 
 Le fichier [docker/db/Dockerfile](../../docker/db/Dockerfile) part de l'image officielle `mysql:8.4`. Il copie le script d'initialisation sous `/docker-entrypoint-initdb.d/10-articles.sql`, emplacement traité par l'entrypoint officiel lors de l'initialisation d'un répertoire de données vide.
 
+Le Dockerfile supprime aussi MySQL Shell (`rpm -e --nodeps mysql-shell`). Cet outil d'administration n'est utilisé ni par le serveur ni par le point d'entrée, et il embarque des paquets Python vulnérables, dont une faille critique (voir partie 5).
+
 Le script SQL ne crée que la table `articles`. La base et l'utilisateur applicatif sont créés par l'image officielle à partir des variables `MYSQL_DATABASE`, `MYSQL_USER` et `MYSQL_PASSWORD` fournies par Compose. La table utilise InnoDB et l'encodage `utf8mb4`.
 
-Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
+Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image : le mot de passe root (`MYSQL_ROOT_PASSWORD`), la base (`MYSQL_DATABASE`) et l'utilisateur applicatif sont définis à l'exécution par Compose, à partir du fichier `.env`. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
 
 ## Vérification
 

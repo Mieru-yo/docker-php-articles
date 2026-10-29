@@ -2,6 +2,12 @@
 
 Le [docker-compose.yml](../../docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`.
 
+| Section | Rôle |
+|---|---|
+| `services` | Les deux conteneurs de la stack (`web`, `db`) : image, variables, ports, dépendances, sécurité |
+| `networks` | Crée le réseau bridge `app-network`, avec un nom fixe, qui relie les deux services |
+| `volumes` | Crée le volume nommé `db-data`, qui stocke les données MySQL en dehors des conteneurs |
+
 ## Configuration
 
 Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à créer à partir de [.env.example](../../.env.example). Les mots de passe de l'exemple sont des valeurs fictives à remplacer ; `.env` est ignoré par Git. Une variable manquante fait échouer `docker compose` (syntaxe `${VAR:?message}`).
@@ -15,6 +21,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Volume | `db-data` → `/var/lib/mysql` | les données survivent à la suppression du conteneur |
 | Ports | aucun publié | la base n'est joignable que depuis `app-network` |
 | Healthcheck | `mysqladmin ping -h 127.0.0.1` | permet à `web` d'attendre que MySQL soit prêt |
+| `restart` | `unless-stopped` | redémarre la base après un crash ou un redémarrage de Docker, sauf si on l'a arrêtée volontairement |
 
 ## Service `web`
 
@@ -23,6 +30,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Image | construite par `docker/web/Dockerfile` | PHP 8.2 + Apache, non-root |
 | Port | `8080:80` | application sur `http://localhost:8080` |
 | Variables | `DB_HOST=db`, `DB_PORT=3306`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | seules variables lues par le code PHP ; les trois dernières viennent des `MYSQL_*` |
+| `restart` | `unless-stopped` | même politique que `db` |
 | `depends_on` | `db` avec `condition: service_healthy` | le Web démarre après que la base répond |
 | `read_only: true` + `tmpfs` | `/tmp`, `/var/run/apache2`, `/var/lock/apache2` | système de fichiers en lecture seule, seuls les dossiers temporaires d'Apache sont inscriptibles |
 | `cap_drop: ALL` | toutes les capabilities retirées | réduit la surface d'attaque |

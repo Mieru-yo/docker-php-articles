@@ -38,6 +38,13 @@ $ docker network inspect app-network --format "{{.Name}} driver={{.Driver}} cont
 app-network driver=bridge containers: db=172.18.0.2/16 web=172.18.0.3/16
 ```
 
+Intérêt d'un réseau bridge personnalisé par rapport au réseau `bridge` par défaut de Docker :
+
+| | Réseau `bridge` par défaut | Réseau personnalisé `app-network` |
+|---|---|---|
+| Résolution par nom | non, uniquement par adresse IP | oui : `db` est résolu par le DNS interne de Docker |
+| Isolation | tous les conteneurs lancés sans `--network` s'y retrouvent ensemble | seuls les services rattachés au réseau peuvent se joindre |
+
 ### Communication entre `web` et `db`
 
 Sur un réseau bridge défini par l'utilisateur, Docker fournit une résolution DNS par nom de service. Le conteneur `web` joint donc la base avec `DB_HOST=db`, sans adresse IP en dur :

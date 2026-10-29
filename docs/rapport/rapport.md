@@ -56,9 +56,10 @@ Avant de conteneuriser l'application, trois problèmes du code fourni ont été 
 | Instruction | Justification |
 |---|---|
 | `FROM php:8.2-apache AS build` | Image officielle PHP 8.2 avec Apache intégré, demandée par le sujet. Apache et PHP dans le même conteneur : un seul service Web à gérer. Sert d'étape de préparation (multi-stage, voir partie 6). |
-| `RUN docker-php-ext-install pdo_mysql mysqli && apt-get purge … && rm -rf …` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Dans la même couche, les outils de compilation fournis par l'image (`gcc`, `make`, en-têtes du noyau…) sont supprimés, ainsi que les listes `apt` et les sources PHP : ils ne servent plus et ajoutaient 61 vulnérabilités (voir partie 5). |
+| `RUN docker-php-ext-install pdo_mysql mysqli && apt-get purge … && rm -rf …` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Dans la même couche, les outils de compilation fournis par l'image (`gcc`, `make`, en-têtes du noyau…) sont supprimés, ainsi que les listes et le cache `apt` (`rm -rf /var/lib/apt/lists/* /var/cache/apt/*`, l'équivalent de `apt-get clean`) et les sources PHP : ils ne servent plus et ajoutaient 61 vulnérabilités (voir partie 5). |
 | `COPY … zz-security-hardening.conf` + `a2enconf` | Configuration Apache : `ServerTokens Prod` et `ServerSignature Off` masquent la version d'Apache, `ServerName` supprime l'avertissement au démarrage. Le préfixe `zz-` la fait charger après `security.conf` de Debian, qui sinon remettait la version complète. |
 | `COPY … zz-security.ini` | `expose_php = Off` : supprime l'en-tête `X-Powered-By` qui révélait la version de PHP. |
+| Configuration Apache par défaut conservée | Le `DocumentRoot` de l'image est déjà `/var/www/html`, et les modules nécessaires sont déjà chargés : `php_module` (exécute le PHP), `mpm_prefork_module` (obligatoire avec `mod_php`), `dir_module` (sert `index.php`). Aucun module supplémentaire n'est utile à l'application. |
 | `mv php.ini-production php.ini` | Configuration PHP de production (erreurs non affichées, limites adaptées). |
 | `COPY --chown=root:root --chmod=644 app/ /var/www/html/` | Copie le code dans le DocumentRoot par défaut d'Apache. Les fichiers appartiennent à `root` et sont en lecture seule pour `www-data` : même si l'application était compromise, le processus Web ne pourrait pas modifier le code. |
 | `FROM scratch` + `COPY --from=build / /` | Étape finale : le système de fichiers préparé est copié dans une image vide. Les fichiers supprimés pendant la préparation ne restent dans aucune couche : l'image passe de 176 à 63 Mo compressés (partie 6). |
@@ -68,6 +69,24 @@ Avant de conteneuriser l'application, trois problèmes du code fourni ont été 
 | `STOPSIGNAL SIGWINCH` | Signal d'arrêt propre d'Apache, repris de l'image officielle : Apache termine les requêtes en cours avant de s'arrêter. |
 | `HEALTHCHECK … curl -fsS http://localhost/` | Docker vérifie toutes les 30 s que la page répond. La page répond en 200 même si la base est indisponible : l'état du conteneur Web reste indépendant de celui de la base. |
 | `ENTRYPOINT ["docker-php-entrypoint"]`, `CMD ["apache2-foreground"]` | Point d'entrée et commande de l'image officielle : Apache est lancé au premier plan, comme processus principal du conteneur. |
+
+Configuration Apache vérifiée dans le conteneur :
+
+```
+$ docker exec web sh -c "grep -h DocumentRoot /etc/apache2/sites-enabled/*"
+	DocumentRoot /var/www/html
+
+$ docker exec web apache2ctl -M
+Loaded Modules:
+ core_module (static)
+ ...
+ dir_module (shared)
+ ...
+ mpm_prefork_module (shared)
+ ...
+ php_module (shared)
+ ...
+```
 
 #### Pourquoi pas de `chmod 777`
 
@@ -105,9 +124,11 @@ Server: Apache
 
 Le fichier [docker/db/Dockerfile](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker/db/Dockerfile) part de l'image officielle `mysql:8.4`. Il copie le script d'initialisation sous `/docker-entrypoint-initdb.d/10-articles.sql`, emplacement traité par l'entrypoint officiel lors de l'initialisation d'un répertoire de données vide.
 
+Le Dockerfile supprime aussi MySQL Shell (`rpm -e --nodeps mysql-shell`). Cet outil d'administration n'est utilisé ni par le serveur ni par le point d'entrée, et il embarque des paquets Python vulnérables, dont une faille critique (voir partie 5).
+
 Le script SQL ne crée que la table `articles`. La base et l'utilisateur applicatif sont créés par l'image officielle à partir des variables `MYSQL_DATABASE`, `MYSQL_USER` et `MYSQL_PASSWORD` fournies par Compose. La table utilise InnoDB et l'encodage `utf8mb4`.
 
-Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
+Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image : le mot de passe root (`MYSQL_ROOT_PASSWORD`), la base (`MYSQL_DATABASE`) et l'utilisateur applicatif sont définis à l'exécution par Compose, à partir du fichier `.env`. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
 
 #### Vérification
 
@@ -142,6 +163,12 @@ La base `articles` et l'utilisateur `app` sont donc bien créés par l'image MyS
 
 Le [docker-compose.yml](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`.
 
+| Section | Rôle |
+|---|---|
+| `services` | Les deux conteneurs de la stack (`web`, `db`) : image, variables, ports, dépendances, sécurité |
+| `networks` | Crée le réseau bridge `app-network`, avec un nom fixe, qui relie les deux services |
+| `volumes` | Crée le volume nommé `db-data`, qui stocke les données MySQL en dehors des conteneurs |
+
 ### Configuration
 
 Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à créer à partir de [.env.example](https://github.com/Mieru-yo/docker-php-articles/blob/main/.env.example). Les mots de passe de l'exemple sont des valeurs fictives à remplacer ; `.env` est ignoré par Git. Une variable manquante fait échouer `docker compose` (syntaxe `${VAR:?message}`).
@@ -155,6 +182,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Volume | `db-data` → `/var/lib/mysql` | les données survivent à la suppression du conteneur |
 | Ports | aucun publié | la base n'est joignable que depuis `app-network` |
 | Healthcheck | `mysqladmin ping -h 127.0.0.1` | permet à `web` d'attendre que MySQL soit prêt |
+| `restart` | `unless-stopped` | redémarre la base après un crash ou un redémarrage de Docker, sauf si on l'a arrêtée volontairement |
 
 ### Service `web`
 
@@ -163,6 +191,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Image | construite par `docker/web/Dockerfile` | PHP 8.2 + Apache, non-root |
 | Port | `8080:80` | application sur `http://localhost:8080` |
 | Variables | `DB_HOST=db`, `DB_PORT=3306`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | seules variables lues par le code PHP ; les trois dernières viennent des `MYSQL_*` |
+| `restart` | `unless-stopped` | même politique que `db` |
 | `depends_on` | `db` avec `condition: service_healthy` | le Web démarre après que la base répond |
 | `read_only: true` + `tmpfs` | `/tmp`, `/var/run/apache2`, `/var/lock/apache2` | système de fichiers en lecture seule, seuls les dossiers temporaires d'Apache sont inscriptibles |
 | `cap_drop: ALL` | toutes les capabilities retirées | réduit la surface d'attaque |
@@ -244,6 +273,13 @@ $ docker network inspect app-network --format "{{.Name}} driver={{.Driver}} cont
 app-network driver=bridge containers: db=172.18.0.2/16 web=172.18.0.3/16
 ```
 
+Intérêt d'un réseau bridge personnalisé par rapport au réseau `bridge` par défaut de Docker :
+
+| | Réseau `bridge` par défaut | Réseau personnalisé `app-network` |
+|---|---|---|
+| Résolution par nom | non, uniquement par adresse IP | oui : `db` est résolu par le DNS interne de Docker |
+| Isolation | tous les conteneurs lancés sans `--network` s'y retrouvent ensemble | seuls les services rattachés au réseau peuvent se joindre |
+
 #### Communication entre `web` et `db`
 
 Sur un réseau bridge défini par l'utilisateur, Docker fournit une résolution DNS par nom de service. Le conteneur `web` joint donc la base avec `DB_HOST=db`, sans adresse IP en dur :
@@ -301,7 +337,7 @@ False
 
 La base n'est donc joignable que depuis `app-network`.
 
-## 5. Sécurité de l'image Web
+## 5. Sécurité et bonnes pratiques
 
 ### Scan de vulnérabilités avec Trivy
 
@@ -312,7 +348,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:lates
   image --scanners vuln --severity CRITICAL,HIGH docker-php-articles-web:latest
 ```
 
-#### Avant correction
+#### Image Web : avant correction
 
 ```
 docker-php-articles-web:avant-j3 (debian 13.7)
@@ -328,7 +364,7 @@ Total: 120 (HIGH: 117, CRITICAL: 3)
 
 Aucune des 120 vulnérabilités n'a de version corrigée publiée dans Debian 13 : un `apt-get upgrade` ne change rien. La correction consiste donc à **supprimer les paquets inutiles** à l'exécution.
 
-#### Correction
+#### Image Web : correction
 
 L'image officielle `php:8.2-apache` conserve tous les outils de compilation (`$PHPIZE_DEPS` : `gcc`, `g++`, `make`, `autoconf`…, plus `libc6-dev` et `linux-libc-dev`) pour pouvoir compiler des extensions. Une fois `pdo_mysql` et `mysqli` compilées, ils ne servent plus et augmentent la surface d'attaque. Ils sont supprimés dans la même instruction `RUN` que la compilation :
 
@@ -341,7 +377,7 @@ RUN docker-php-ext-install pdo_mysql mysqli \
 
 En plus de réduire les vulnérabilités, un attaquant qui prendrait le contrôle du conteneur ne disposerait plus d'un compilateur.
 
-#### Après correction
+#### Image Web : après correction
 
 ```
 docker-php-articles-web:apres-j3 (debian 13.7)
@@ -357,6 +393,56 @@ Total: 59 (HIGH: 58, CRITICAL: 1)
 La vulnérabilité critique restante (`CVE-2026-6653`, `libxml2`) n'a pas encore de correctif publié par Debian, et `libxml2` est nécessaire à PHP : elle ne peut pas être supprimée. Elle disparaîtra en reconstruisant l'image quand Debian publiera le correctif (le pipeline CI reconstruit l'image à chaque push).
 
 Rapports complets : `docs/rapport/sorties/5-trivy-avant-j3.txt` et `5-trivy-apres-j3.txt`.
+
+#### Image de la base de données
+
+Même scan sur `nellotsuka/docker-php-articles-db:latest` :
+
+```
+nellotsuka/docker-php-articles-db:latest (oracle 9.8)    oracle       0
+usr/lib/mysqlsh/.../certifi-2026.2.25                    python-pkg   1
+usr/lib/mysqlsh/.../cryptography-46.0.5                  python-pkg   3
+usr/lib/mysqlsh/.../pyopenssl-25.3.0                     python-pkg   1
+usr/lib/mysqlsh/.../urllib3-2.6.3                        python-pkg   4
+usr/local/bin/gosu                                       gobinary    26
+
+Python (python-pkg)  Total: 9 (HIGH: 8, CRITICAL: 1)
+gosu (gobinary)      Total: 26 (HIGH: 25, CRITICAL: 1)
+```
+
+Le système (Oracle Linux 9.8) n'a aucune vulnérabilité. Elles viennent de deux composants ajoutés par l'image officielle `mysql:8.4` :
+
+- **MySQL Shell** (`/usr/lib/mysqlsh`, 467 Mo) : outil d'administration en ligne de commande, qui embarque ses propres paquets Python. Il n'est utilisé ni par le serveur ni par le point d'entrée. Il est donc supprimé dans le Dockerfile :
+
+```dockerfile
+RUN rpm -e --nodeps mysql-shell && rm -rf /var/cache/dnf /var/cache/yum
+```
+
+- **gosu** : sert au point d'entrée pour passer de `root` à l'utilisateur `mysql` avant de lancer le serveur. Il est indispensable et ne peut pas être supprimé. La faille critique (`CVE-2025-68121`) se trouve dans la bibliothèque TLS de Go, que `gosu` n'utilise pas (il ne fait aucune connexion réseau). Elle sera corrigée quand l'image officielle `mysql:8.4` sera reconstruite avec une version récente de `gosu`.
+
+Après correction :
+
+```
+docker-php-articles-db:sans-mysqlsh (oracle 9.8)   oracle      0
+usr/local/bin/gosu                                 gobinary   26
+
+Total: 26 (HIGH: 25, CRITICAL: 1)
+```
+
+| Image `db` | CRITICAL | HIGH | Total |
+|---|---|---|---|
+| Avant | 2 | 33 | 35 |
+| Après | 1 | 25 | 26 |
+
+La stack a été relancée avec cette image : `db` et `web` sont `healthy` et l'ajout d'un article fonctionne.
+
+```
+$ docker exec db sh -c 'command -v mysqlsh || echo "mysqlsh absent"; mysql --version'
+mysqlsh absent
+mysql  Ver 8.4.13 for Linux on x86_64 (MySQL Community Server - GPL)
+```
+
+Rapports complets : `docs/rapport/sorties/5-trivy-db-avant.txt` et `5-trivy-db-apres.txt`.
 
 ### Mesures de sécurité de l'image Web
 
