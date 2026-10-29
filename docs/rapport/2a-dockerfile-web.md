@@ -21,7 +21,7 @@ Avant de conteneuriser l'application, trois problèmes du code fourni ont été 
 | Instruction | Justification |
 |---|---|
 | `FROM php:8.2-apache` | Image officielle PHP 8.2 avec Apache intégré, demandée par le sujet. Apache et PHP dans le même conteneur : un seul service Web à gérer. |
-| `RUN docker-php-ext-install pdo_mysql mysqli` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Elles sont compilées à partir des sources déjà présentes dans l'image : aucun paquet `apt` n'est ajouté, il n'y a donc pas de cache `apt` à nettoyer. |
+| `RUN docker-php-ext-install pdo_mysql mysqli && apt-get purge … && rm -rf …` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Dans la même couche, les outils de compilation fournis par l'image (`gcc`, `make`, en-têtes du noyau…) sont supprimés, ainsi que les listes `apt` et les sources PHP : ils ne servent plus et ajoutaient 61 vulnérabilités (voir partie 5). |
 | `COPY … zz-security-hardening.conf` + `a2enconf` | Configuration Apache : `ServerTokens Prod` et `ServerSignature Off` masquent la version d'Apache, `ServerName` supprime l'avertissement au démarrage. Le préfixe `zz-` la fait charger après `security.conf` de Debian, qui sinon remettait la version complète. |
 | `COPY … zz-security.ini` | `expose_php = Off` : supprime l'en-tête `X-Powered-By` qui révélait la version de PHP. |
 | `mv php.ini-production php.ini` | Configuration PHP de production (erreurs non affichées, limites adaptées). |
