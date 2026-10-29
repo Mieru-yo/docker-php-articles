@@ -40,7 +40,7 @@ Aucun identifiant n'apparaît dans le fichier du pipeline. Si les secrets ne son
 | Tag | Exemple | Usage |
 |---|---|---|
 | `latest` | `nellotsuka/docker-php-articles-web:latest` | Dernière version de `main`, utilisée par `docker-compose.yml` |
-| SHA court du commit | `nellotsuka/docker-php-articles-web:f170ed3` | Version figée : permet de revenir à une version précise |
+| SHA court du commit | `nellotsuka/docker-php-articles-web:21effd9` | Version figée : permet de revenir à une version précise |
 
 ## Exécution
 
@@ -62,3 +62,24 @@ Premier passage sur la branche `ci/github-actions` (run `40853016316`) :
 ```
 
 La publication est ignorée car il ne s'agit pas d'un push sur `main`.
+
+### Publication depuis `main`
+
+Après l'ajout des deux secrets, le pipeline du commit `21effd9` sur `main` a été relancé (run `40880302492`, tentative 2) :
+
+```
+## Lint PHP -> success                    (13:46:06 -> 13:46:19)
+## Build et test de la stack -> success   (13:46:22 -> 13:47:20)
+## Publication Docker Hub -> success      (13:47:22 -> 13:48:28)
+```
+
+Tags relevés ensuite par l'API publique de Docker Hub (`https://hub.docker.com/v2/repositories/nellotsuka/<dépôt>/tags`) :
+
+| Dépôt | Tag | Poussé le (UTC) | Taille compressée | Par | Digest |
+|---|---|---|---|---|---|
+| `docker-php-articles-web` | `latest` | 2026-10-29 13:48:02 | 62,6 Mo | `nellotsuka` (CI) | `sha256:10b4567fafd5…` |
+| `docker-php-articles-web` | `21effd9` | 2026-10-29 13:48:03 | 62,6 Mo | `nellotsuka` (CI) | `sha256:10b4567fafd5…` |
+| `docker-php-articles-db` | `latest` | 2026-10-29 13:48:16 | 238,3 Mo | `nellotsuka` (CI) | `sha256:6b84d9c4e0c6…` |
+| `docker-php-articles-db` | `21effd9` | 2026-10-29 13:48:18 | 238,3 Mo | `nellotsuka` (CI) | `sha256:6b84d9c4e0c6…` |
+
+`latest` et `21effd9` ont le même digest : ce sont deux noms pour la même image. Le tag `6c5b832`, poussé à la main par `yannd0cker` (partie 7b), reste disponible dans les deux dépôts.
