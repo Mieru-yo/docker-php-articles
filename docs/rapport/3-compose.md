@@ -62,4 +62,4 @@ $ docker exec web sh -c "touch /var/www/html/x"
 touch: cannot touch '/var/www/html/x': Read-only file system
 ```
 
-Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Les tests de persistance du volume sont décrits dans la partie 4 (`4-reseaux.md`).
+Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Le test de persistance du volume est présenté dans la partie 4.

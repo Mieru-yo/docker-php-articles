@@ -16,8 +16,7 @@ Docker Compose version v2.40.3-desktop.1
 Préparation de la machine avant le test :
 
 - les images `nellotsuka/docker-php-articles-web:latest` et `-db:latest` présentes en local ont été supprimées (`docker rmi`), pour que le `pull` les télécharge réellement ;
-- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait ;
-- le port `8080` était utilisé par le conteneur d'un autre projet, arrêté pendant le test.
+- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait.
 
 ## Clonage et configuration
 
@@ -72,7 +71,7 @@ web    nellotsuka/docker-php-articles-web:latest   Up 25 seconds (healthy)   0.0
 ```
 
 - L'image `web` (couche unique de 62,6 Mo, partie 6) est entièrement téléchargée.
-- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine, utilisée pour les TP.
+- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine.
 - `--no-build` garantit que Compose utilise les images de Docker Hub et ne reconstruit rien, même si le `docker-compose.yml` contient une section `build`.
 
 ## Utilisation de l'application
@@ -116,8 +115,3 @@ web    nellotsuka/docker-php-articles-web:latest   Up 21 seconds (healthy)   0.0
 
 `docker compose down` supprime les conteneurs et le réseau, mais pas le volume `db-data` : l'article créé avant l'arrêt est toujours affiché après le redémarrage.
 
-Nettoyage final : `docker compose down -v`, qui supprime aussi le volume.
-
-## Erreurs rencontrées
-
-Aucune.

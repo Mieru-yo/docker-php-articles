@@ -202,11 +202,11 @@ $ docker exec web sh -c "touch /var/www/html/x"
 touch: cannot touch '/var/www/html/x': Read-only file system
 ```
 
-Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Les tests de persistance du volume sont décrits dans la partie 4 (`4-reseaux.md`).
+Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Le test de persistance du volume est présenté dans la partie 4.
 
 ## 4. Réseaux et persistance
 
-### Persistance des données (partie 3)
+### Persistance des données
 
 Le volume nommé `db-data` est monté sur `/var/lib/mysql`. Pour le vérifier, un article est créé, les conteneurs sont supprimés (`docker compose down`, sans l'option `-v`), puis recréés :
 
@@ -231,7 +231,7 @@ $ curl.exe -s http://localhost:8080/ | Select-String "Persistance"
 
 Les conteneurs ont été détruits et recréés, mais le volume `db-data` est resté en place : l'article est toujours affiché. Les données sont donc indépendantes du cycle de vie des conteneurs. Seule la commande `docker compose down -v` supprime le volume.
 
-### Réseau (partie 4)
+### Réseau
 
 Les deux services sont rattachés au réseau bridge `app-network`, défini dans le Compose :
 
@@ -257,7 +257,7 @@ TCP db:3306 OK
 db -> 172.18.0.2
 ```
 
-Test `curl` demandé par le sujet, depuis le conteneur `web` :
+Test avec `curl` depuis le conteneur `web` :
 
 ```
 $ docker exec web curl -sS --max-time 5 http://db:3306
@@ -274,11 +274,11 @@ $ docker exec web curl -sS --max-time 5 http://db:3307
 curl: (7) Failed to connect to db port 3307 after 1 ms: Could not connect to server
 ```
 
-MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion. Ce test a été fait plus tard, sur la stack du clone neuf de la partie 8, d'où une adresse IP différente de celle relevée plus haut.
+MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion.
 
 #### À propos de `ping`
 
-La commande `ping` demandée par le sujet n'est pas utilisable depuis `web` :
+`ping` n'est pas disponible dans le conteneur `web` :
 
 ```
 $ docker exec web ping -c 2 db
@@ -465,7 +465,7 @@ Seuls le code PHP, le script SQL et les deux fichiers de configuration du servic
 
 ### Vérification avec la stack complète
 
-L'image optimisée a été testée avec le `docker-compose.yml` du projet (port déplacé sur `8095` pour le test, le port `8080` étant déjà utilisé sur la machine de test) :
+L'image optimisée a été testée avec le `docker-compose.yml` du projet :
 
 ```
 $ docker compose ps
@@ -657,8 +657,7 @@ Docker Compose version v2.40.3-desktop.1
 Préparation de la machine avant le test :
 
 - les images `nellotsuka/docker-php-articles-web:latest` et `-db:latest` présentes en local ont été supprimées (`docker rmi`), pour que le `pull` les télécharge réellement ;
-- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait ;
-- le port `8080` était utilisé par le conteneur d'un autre projet, arrêté pendant le test.
+- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait.
 
 ### Clonage et configuration
 
@@ -713,7 +712,7 @@ web    nellotsuka/docker-php-articles-web:latest   Up 25 seconds (healthy)   0.0
 ```
 
 - L'image `web` (couche unique de 62,6 Mo, partie 6) est entièrement téléchargée.
-- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine, utilisée pour les TP.
+- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine.
 - `--no-build` garantit que Compose utilise les images de Docker Hub et ne reconstruit rien, même si le `docker-compose.yml` contient une section `build`.
 
 ### Utilisation de l'application
@@ -756,9 +755,3 @@ web    nellotsuka/docker-php-articles-web:latest   Up 21 seconds (healthy)   0.0
 ```
 
 `docker compose down` supprime les conteneurs et le réseau, mais pas le volume `db-data` : l'article créé avant l'arrêt est toujours affiché après le redémarrage.
-
-Nettoyage final : `docker compose down -v`, qui supprime aussi le volume.
-
-### Erreurs rencontrées
-
-Aucune.

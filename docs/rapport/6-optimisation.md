@@ -73,7 +73,7 @@ Seuls le code PHP, le script SQL et les deux fichiers de configuration du servic
 
 ## Vérification avec la stack complète
 
-L'image optimisée a été testée avec le `docker-compose.yml` du projet (port déplacé sur `8095` pour le test, le port `8080` étant déjà utilisé sur la machine de test) :
+L'image optimisée a été testée avec le `docker-compose.yml` du projet :
 
 ```
 $ docker compose ps
