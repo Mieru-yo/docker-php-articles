@@ -1,6 +1,6 @@
 # 3. Orchestration Docker Compose
 
-Le [docker-compose.yml](../../docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`. Il suit le contrat d'[ORGANISATION.md](../ORGANISATION.md).
+Le [docker-compose.yml](../../docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`.
 
 ## Configuration
 
@@ -11,7 +11,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Élément | Valeur | Justification |
 |---|---|---|
 | Image | construite par `docker/db/Dockerfile` | MySQL 8.4 avec le script de création de la table |
-| `container_name` | `db` | nom fixé par le contrat |
+| `container_name` | `db` | nom fixe, utilisé par `docker exec db …` |
 | Volume | `db-data` → `/var/lib/mysql` | les données survivent à la suppression du conteneur |
 | Ports | aucun publié | la base n'est joignable que depuis `app-network` |
 | Healthcheck | `mysqladmin ping -h 127.0.0.1` | permet à `web` d'attendre que MySQL soit prêt |

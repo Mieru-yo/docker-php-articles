@@ -12,23 +12,6 @@ Conteneurisation d'une application Web PHP / MySQL (liste d'articles) : une imag
 | Image Web | <https://hub.docker.com/r/nellotsuka/docker-php-articles-web> |
 | Image base de données | <https://hub.docker.com/r/nellotsuka/docker-php-articles-db> |
 
-### Répartition du travail
-
-Chaque partie a été développée sur sa propre branche et fusionnée dans `main` par Pull Request, avec des commits au format *Conventional Commits*. Les noms partagés (services, réseau, volume, variables, images) ont été fixés au départ dans `docs/ORGANISATION.md`, pour que chacun puisse avancer sans attendre l'autre.
-
-| Partie | Réalisée par |
-|---|---|
-| 1. Architecture | Yann |
-| Corrections du code PHP, 2.1 Dockerfile Web | Jérémy |
-| 2.2 Dockerfile de la base | Yann |
-| 3. Docker Compose | Yann |
-| 4. Réseaux et persistance | Yann |
-| 5. Sécurité | Jérémy |
-| 6. Optimisation | Jérémy |
-| 7.1 Pipeline CI/CD | Jérémy |
-| 7.2 Publication manuelle sur Docker Hub | Yann |
-| 8. Test depuis un clone neuf, README, assemblage du rapport | Jérémy |
-
 ## 1. Architecture
 
 ### Vue d'ensemble
@@ -47,10 +30,6 @@ L'application rejoint la base sur le réseau interne à l'adresse `db:3306`. Le 
 ### Configuration
 
 Les paramètres MySQL sont conservés dans le fichier local `.env`, créé à partir de `.env.example` et exclu du contrôle de version. Compose configure le serveur avec les variables `MYSQL_*` et transmet au service Web leurs équivalents applicatifs `DB_*`. Le code PHP ne contient donc aucun identifiant de connexion fixe.
-
-### Contrat retenu
-
-Les noms des services, du réseau et du volume, les ports, les versions des images et les variables d'environnement suivent le contrat commun décrit dans [ORGANISATION.md](https://github.com/Mieru-yo/docker-php-articles/blob/main/docs/ORGANISATION.md).
 
 ## 2. Images Docker
 
@@ -161,7 +140,7 @@ La base `articles` et l'utilisateur `app` sont donc bien créés par l'image MyS
 
 ## 3. Orchestration Docker Compose
 
-Le [docker-compose.yml](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`. Il suit le contrat d'[ORGANISATION.md](https://github.com/Mieru-yo/docker-php-articles/blob/main/docs/ORGANISATION.md).
+Le [docker-compose.yml](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`.
 
 ### Configuration
 
@@ -172,7 +151,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Élément | Valeur | Justification |
 |---|---|---|
 | Image | construite par `docker/db/Dockerfile` | MySQL 8.4 avec le script de création de la table |
-| `container_name` | `db` | nom fixé par le contrat |
+| `container_name` | `db` | nom fixe, utilisé par `docker exec db …` |
 | Volume | `db-data` → `/var/lib/mysql` | les données survivent à la suppression du conteneur |
 | Ports | aucun publié | la base n'est joignable que depuis `app-network` |
 | Healthcheck | `mysqladmin ping -h 127.0.0.1` | permet à `web` d'attendre que MySQL soit prêt |
