@@ -278,6 +278,25 @@ TCP db:3306 OK
 db -> 172.18.0.2
 ```
 
+Test `curl` demandé par le sujet, depuis le conteneur `web` :
+
+```
+$ docker exec web curl -sS --max-time 5 http://db:3306
+curl: (1) Received HTTP/0.9 when not allowed
+
+$ docker exec web curl -sS --max-time 5 --http0.9 -o /dev/null -w "connexion vers %{remote_ip}:%{remote_port} etablie\n" http://db:3306
+connexion vers 172.26.0.2:3306 etablie
+
+$ docker exec web curl -sS --max-time 5 --http0.9 http://db:3306 | cat -v
+J^@^@^@
+8.4.13^@ ... caching_sha2_password^@ ... Got packets out of order
+
+$ docker exec web curl -sS --max-time 5 http://db:3307
+curl: (7) Failed to connect to db port 3307 after 1 ms: Could not connect to server
+```
+
+MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion. Ce test a été fait plus tard, sur la stack du clone neuf de la partie 8, d'où une adresse IP différente de celle relevée plus haut.
+
 #### À propos de `ping`
 
 La commande `ping` demandée par le sujet n'est pas utilisable depuis `web` :
