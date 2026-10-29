@@ -14,7 +14,3 @@ L'application rejoint la base sur le réseau interne à l'adresse `db:3306`. Le 
 ## Configuration
 
 Les paramètres MySQL sont conservés dans le fichier local `.env`, créé à partir de `.env.example` et exclu du contrôle de version. Compose configure le serveur avec les variables `MYSQL_*` et transmet au service Web leurs équivalents applicatifs `DB_*`. Le code PHP ne contient donc aucun identifiant de connexion fixe.
-
-## Contrat retenu
-
-Les noms des services, du réseau et du volume, les ports, les versions des images et les variables d'environnement suivent le contrat commun décrit dans [ORGANISATION.md](../ORGANISATION.md).

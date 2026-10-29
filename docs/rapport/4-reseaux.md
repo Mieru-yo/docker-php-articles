@@ -1,6 +1,6 @@
 # 4. Réseaux et persistance
 
-## Persistance des données (partie 3)
+## Persistance des données
 
 Le volume nommé `db-data` est monté sur `/var/lib/mysql`. Pour le vérifier, un article est créé, les conteneurs sont supprimés (`docker compose down`, sans l'option `-v`), puis recréés :
 
@@ -25,7 +25,7 @@ $ curl.exe -s http://localhost:8080/ | Select-String "Persistance"
 
 Les conteneurs ont été détruits et recréés, mais le volume `db-data` est resté en place : l'article est toujours affiché. Les données sont donc indépendantes du cycle de vie des conteneurs. Seule la commande `docker compose down -v` supprime le volume.
 
-## Réseau (partie 4)
+## Réseau
 
 Les deux services sont rattachés au réseau bridge `app-network`, défini dans le Compose :
 
@@ -37,6 +37,13 @@ d47a33318254   app-network   bridge    local
 $ docker network inspect app-network --format "{{.Name}} driver={{.Driver}} containers: {{range .Containers}}{{.Name}}={{.IPv4Address}} {{end}}"
 app-network driver=bridge containers: db=172.18.0.2/16 web=172.18.0.3/16
 ```
+
+Intérêt d'un réseau bridge personnalisé par rapport au réseau `bridge` par défaut de Docker :
+
+| | Réseau `bridge` par défaut | Réseau personnalisé `app-network` |
+|---|---|---|
+| Résolution par nom | non, uniquement par adresse IP | oui : `db` est résolu par le DNS interne de Docker |
+| Isolation | tous les conteneurs lancés sans `--network` s'y retrouvent ensemble | seuls les services rattachés au réseau peuvent se joindre |
 
 ### Communication entre `web` et `db`
 
@@ -51,7 +58,7 @@ TCP db:3306 OK
 db -> 172.18.0.2
 ```
 
-Test `curl` demandé par le sujet, depuis le conteneur `web` :
+Test avec `curl` depuis le conteneur `web` :
 
 ```
 $ docker exec web curl -sS --max-time 5 http://db:3306
@@ -68,11 +75,11 @@ $ docker exec web curl -sS --max-time 5 http://db:3307
 curl: (7) Failed to connect to db port 3307 after 1 ms: Could not connect to server
 ```
 
-MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion. Ce test a été fait plus tard, sur la stack du clone neuf de la partie 8, d'où une adresse IP différente de celle relevée plus haut.
+MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion.
 
 ### À propos de `ping`
 
-La commande `ping` demandée par le sujet n'est pas utilisable depuis `web` :
+`ping` n'est pas disponible dans le conteneur `web` :
 
 ```
 $ docker exec web ping -c 2 db

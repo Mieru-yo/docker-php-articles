@@ -12,23 +12,6 @@ Conteneurisation d'une application Web PHP / MySQL (liste d'articles) : une imag
 | Image Web | <https://hub.docker.com/r/nellotsuka/docker-php-articles-web> |
 | Image base de données | <https://hub.docker.com/r/nellotsuka/docker-php-articles-db> |
 
-### Répartition du travail
-
-Chaque partie a été développée sur sa propre branche et fusionnée dans `main` par Pull Request, avec des commits au format *Conventional Commits*. Les noms partagés (services, réseau, volume, variables, images) ont été fixés au départ dans `docs/ORGANISATION.md`, pour que chacun puisse avancer sans attendre l'autre.
-
-| Partie | Réalisée par |
-|---|---|
-| 1. Architecture | Yann |
-| Corrections du code PHP, 2.1 Dockerfile Web | Jérémy |
-| 2.2 Dockerfile de la base | Yann |
-| 3. Docker Compose | Yann |
-| 4. Réseaux et persistance | Yann |
-| 5. Sécurité | Jérémy |
-| 6. Optimisation | Jérémy |
-| 7.1 Pipeline CI/CD | Jérémy |
-| 7.2 Publication manuelle sur Docker Hub | Yann |
-| 8. Test depuis un clone neuf, README, assemblage du rapport | Jérémy |
-
 ## 1. Architecture
 
 ### Vue d'ensemble
@@ -47,10 +30,6 @@ L'application rejoint la base sur le réseau interne à l'adresse `db:3306`. Le 
 ### Configuration
 
 Les paramètres MySQL sont conservés dans le fichier local `.env`, créé à partir de `.env.example` et exclu du contrôle de version. Compose configure le serveur avec les variables `MYSQL_*` et transmet au service Web leurs équivalents applicatifs `DB_*`. Le code PHP ne contient donc aucun identifiant de connexion fixe.
-
-### Contrat retenu
-
-Les noms des services, du réseau et du volume, les ports, les versions des images et les variables d'environnement suivent le contrat commun décrit dans [ORGANISATION.md](https://github.com/Mieru-yo/docker-php-articles/blob/main/docs/ORGANISATION.md).
 
 ## 2. Images Docker
 
@@ -77,9 +56,10 @@ Avant de conteneuriser l'application, trois problèmes du code fourni ont été 
 | Instruction | Justification |
 |---|---|
 | `FROM php:8.2-apache AS build` | Image officielle PHP 8.2 avec Apache intégré, demandée par le sujet. Apache et PHP dans le même conteneur : un seul service Web à gérer. Sert d'étape de préparation (multi-stage, voir partie 6). |
-| `RUN docker-php-ext-install pdo_mysql mysqli && apt-get purge … && rm -rf …` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Dans la même couche, les outils de compilation fournis par l'image (`gcc`, `make`, en-têtes du noyau…) sont supprimés, ainsi que les listes `apt` et les sources PHP : ils ne servent plus et ajoutaient 61 vulnérabilités (voir partie 5). |
+| `RUN docker-php-ext-install pdo_mysql mysqli && apt-get purge … && rm -rf …` | Extensions nécessaires pour se connecter à MySQL (`pdo_mysql` est utilisée par l'application, `mysqli` est demandée par le sujet). Dans la même couche, les outils de compilation fournis par l'image (`gcc`, `make`, en-têtes du noyau…) sont supprimés, ainsi que les listes et le cache `apt` (`rm -rf /var/lib/apt/lists/* /var/cache/apt/*`, l'équivalent de `apt-get clean`) et les sources PHP : ils ne servent plus et ajoutaient 61 vulnérabilités (voir partie 5). |
 | `COPY … zz-security-hardening.conf` + `a2enconf` | Configuration Apache : `ServerTokens Prod` et `ServerSignature Off` masquent la version d'Apache, `ServerName` supprime l'avertissement au démarrage. Le préfixe `zz-` la fait charger après `security.conf` de Debian, qui sinon remettait la version complète. |
 | `COPY … zz-security.ini` | `expose_php = Off` : supprime l'en-tête `X-Powered-By` qui révélait la version de PHP. |
+| Configuration Apache par défaut conservée | Le `DocumentRoot` de l'image est déjà `/var/www/html`, et les modules nécessaires sont déjà chargés : `php_module` (exécute le PHP), `mpm_prefork_module` (obligatoire avec `mod_php`), `dir_module` (sert `index.php`). Aucun module supplémentaire n'est utile à l'application. |
 | `mv php.ini-production php.ini` | Configuration PHP de production (erreurs non affichées, limites adaptées). |
 | `COPY --chown=root:root --chmod=644 app/ /var/www/html/` | Copie le code dans le DocumentRoot par défaut d'Apache. Les fichiers appartiennent à `root` et sont en lecture seule pour `www-data` : même si l'application était compromise, le processus Web ne pourrait pas modifier le code. |
 | `FROM scratch` + `COPY --from=build / /` | Étape finale : le système de fichiers préparé est copié dans une image vide. Les fichiers supprimés pendant la préparation ne restent dans aucune couche : l'image passe de 176 à 63 Mo compressés (partie 6). |
@@ -89,6 +69,24 @@ Avant de conteneuriser l'application, trois problèmes du code fourni ont été 
 | `STOPSIGNAL SIGWINCH` | Signal d'arrêt propre d'Apache, repris de l'image officielle : Apache termine les requêtes en cours avant de s'arrêter. |
 | `HEALTHCHECK … curl -fsS http://localhost/` | Docker vérifie toutes les 30 s que la page répond. La page répond en 200 même si la base est indisponible : l'état du conteneur Web reste indépendant de celui de la base. |
 | `ENTRYPOINT ["docker-php-entrypoint"]`, `CMD ["apache2-foreground"]` | Point d'entrée et commande de l'image officielle : Apache est lancé au premier plan, comme processus principal du conteneur. |
+
+Configuration Apache vérifiée dans le conteneur :
+
+```
+$ docker exec web sh -c "grep -h DocumentRoot /etc/apache2/sites-enabled/*"
+	DocumentRoot /var/www/html
+
+$ docker exec web apache2ctl -M
+Loaded Modules:
+ core_module (static)
+ ...
+ dir_module (shared)
+ ...
+ mpm_prefork_module (shared)
+ ...
+ php_module (shared)
+ ...
+```
 
 #### Pourquoi pas de `chmod 777`
 
@@ -126,9 +124,11 @@ Server: Apache
 
 Le fichier [docker/db/Dockerfile](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker/db/Dockerfile) part de l'image officielle `mysql:8.4`. Il copie le script d'initialisation sous `/docker-entrypoint-initdb.d/10-articles.sql`, emplacement traité par l'entrypoint officiel lors de l'initialisation d'un répertoire de données vide.
 
+Le Dockerfile supprime aussi MySQL Shell (`rpm -e --nodeps mysql-shell`). Cet outil d'administration n'est utilisé ni par le serveur ni par le point d'entrée, et il embarque des paquets Python vulnérables, dont une faille critique (voir partie 5).
+
 Le script SQL ne crée que la table `articles`. La base et l'utilisateur applicatif sont créés par l'image officielle à partir des variables `MYSQL_DATABASE`, `MYSQL_USER` et `MYSQL_PASSWORD` fournies par Compose. La table utilise InnoDB et l'encodage `utf8mb4`.
 
-Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
+Le fichier appartient à `root` et est lisible sans être modifiable (`0644`). Aucun mot de passe n'est incorporé à l'image : le mot de passe root (`MYSQL_ROOT_PASSWORD`), la base (`MYSQL_DATABASE`) et l'utilisateur applicatif sont définis à l'exécution par Compose, à partir du fichier `.env`. Le contexte de build reste la racine du dépôt afin de pouvoir copier `db/init/articles.sql`.
 
 #### Vérification
 
@@ -161,7 +161,13 @@ La base `articles` et l'utilisateur `app` sont donc bien créés par l'image MyS
 
 ## 3. Orchestration Docker Compose
 
-Le [docker-compose.yml](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`. Il suit le contrat d'[ORGANISATION.md](https://github.com/Mieru-yo/docker-php-articles/blob/main/docs/ORGANISATION.md).
+Le [docker-compose.yml](https://github.com/Mieru-yo/docker-php-articles/blob/main/docker-compose.yml) définit deux services (`web` et `db`), le réseau bridge `app-network` et le volume nommé `db-data`.
+
+| Section | Rôle |
+|---|---|
+| `services` | Les deux conteneurs de la stack (`web`, `db`) : image, variables, ports, dépendances, sécurité |
+| `networks` | Crée le réseau bridge `app-network`, avec un nom fixe, qui relie les deux services |
+| `volumes` | Crée le volume nommé `db-data`, qui stocke les données MySQL en dehors des conteneurs |
 
 ### Configuration
 
@@ -172,10 +178,11 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Élément | Valeur | Justification |
 |---|---|---|
 | Image | construite par `docker/db/Dockerfile` | MySQL 8.4 avec le script de création de la table |
-| `container_name` | `db` | nom fixé par le contrat |
+| `container_name` | `db` | nom fixe, utilisé par `docker exec db …` |
 | Volume | `db-data` → `/var/lib/mysql` | les données survivent à la suppression du conteneur |
 | Ports | aucun publié | la base n'est joignable que depuis `app-network` |
 | Healthcheck | `mysqladmin ping -h 127.0.0.1` | permet à `web` d'attendre que MySQL soit prêt |
+| `restart` | `unless-stopped` | redémarre la base après un crash ou un redémarrage de Docker, sauf si on l'a arrêtée volontairement |
 
 ### Service `web`
 
@@ -184,6 +191,7 @@ Les quatre variables `MYSQL_*` sont définies dans le fichier local `.env`, à c
 | Image | construite par `docker/web/Dockerfile` | PHP 8.2 + Apache, non-root |
 | Port | `8080:80` | application sur `http://localhost:8080` |
 | Variables | `DB_HOST=db`, `DB_PORT=3306`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | seules variables lues par le code PHP ; les trois dernières viennent des `MYSQL_*` |
+| `restart` | `unless-stopped` | même politique que `db` |
 | `depends_on` | `db` avec `condition: service_healthy` | le Web démarre après que la base répond |
 | `read_only: true` + `tmpfs` | `/tmp`, `/var/run/apache2`, `/var/lock/apache2` | système de fichiers en lecture seule, seuls les dossiers temporaires d'Apache sont inscriptibles |
 | `cap_drop: ALL` | toutes les capabilities retirées | réduit la surface d'attaque |
@@ -223,11 +231,11 @@ $ docker exec web sh -c "touch /var/www/html/x"
 touch: cannot touch '/var/www/html/x': Read-only file system
 ```
 
-Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Les tests de persistance du volume sont décrits dans la partie 4 (`4-reseaux.md`).
+Le port MySQL n'étant pas publié, seul le service Web est accessible depuis l'hôte. Le test de persistance du volume est présenté dans la partie 4.
 
 ## 4. Réseaux et persistance
 
-### Persistance des données (partie 3)
+### Persistance des données
 
 Le volume nommé `db-data` est monté sur `/var/lib/mysql`. Pour le vérifier, un article est créé, les conteneurs sont supprimés (`docker compose down`, sans l'option `-v`), puis recréés :
 
@@ -252,7 +260,7 @@ $ curl.exe -s http://localhost:8080/ | Select-String "Persistance"
 
 Les conteneurs ont été détruits et recréés, mais le volume `db-data` est resté en place : l'article est toujours affiché. Les données sont donc indépendantes du cycle de vie des conteneurs. Seule la commande `docker compose down -v` supprime le volume.
 
-### Réseau (partie 4)
+### Réseau
 
 Les deux services sont rattachés au réseau bridge `app-network`, défini dans le Compose :
 
@@ -264,6 +272,13 @@ d47a33318254   app-network   bridge    local
 $ docker network inspect app-network --format "{{.Name}} driver={{.Driver}} containers: {{range .Containers}}{{.Name}}={{.IPv4Address}} {{end}}"
 app-network driver=bridge containers: db=172.18.0.2/16 web=172.18.0.3/16
 ```
+
+Intérêt d'un réseau bridge personnalisé par rapport au réseau `bridge` par défaut de Docker :
+
+| | Réseau `bridge` par défaut | Réseau personnalisé `app-network` |
+|---|---|---|
+| Résolution par nom | non, uniquement par adresse IP | oui : `db` est résolu par le DNS interne de Docker |
+| Isolation | tous les conteneurs lancés sans `--network` s'y retrouvent ensemble | seuls les services rattachés au réseau peuvent se joindre |
 
 #### Communication entre `web` et `db`
 
@@ -278,7 +293,7 @@ TCP db:3306 OK
 db -> 172.18.0.2
 ```
 
-Test `curl` demandé par le sujet, depuis le conteneur `web` :
+Test avec `curl` depuis le conteneur `web` :
 
 ```
 $ docker exec web curl -sS --max-time 5 http://db:3306
@@ -295,11 +310,11 @@ $ docker exec web curl -sS --max-time 5 http://db:3307
 curl: (7) Failed to connect to db port 3307 after 1 ms: Could not connect to server
 ```
 
-MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion. Ce test a été fait plus tard, sur la stack du clone neuf de la partie 8, d'où une adresse IP différente de celle relevée plus haut.
+MySQL ne parle pas HTTP : `curl` refuse la réponse, mais la connexion TCP vers `db:3306` est bien établie. Avec `--http0.9`, on voit le message d'accueil du serveur MySQL (version `8.4.13`, méthode d'authentification `caching_sha2_password`). À titre de comparaison, un port où rien n'écoute (`3307`) donne une erreur de connexion.
 
 #### À propos de `ping`
 
-La commande `ping` demandée par le sujet n'est pas utilisable depuis `web` :
+`ping` n'est pas disponible dans le conteneur `web` :
 
 ```
 $ docker exec web ping -c 2 db
@@ -322,7 +337,7 @@ False
 
 La base n'est donc joignable que depuis `app-network`.
 
-## 5. Sécurité de l'image Web
+## 5. Sécurité et bonnes pratiques
 
 ### Scan de vulnérabilités avec Trivy
 
@@ -333,7 +348,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:lates
   image --scanners vuln --severity CRITICAL,HIGH docker-php-articles-web:latest
 ```
 
-#### Avant correction
+#### Image Web : avant correction
 
 ```
 docker-php-articles-web:avant-j3 (debian 13.7)
@@ -349,7 +364,7 @@ Total: 120 (HIGH: 117, CRITICAL: 3)
 
 Aucune des 120 vulnérabilités n'a de version corrigée publiée dans Debian 13 : un `apt-get upgrade` ne change rien. La correction consiste donc à **supprimer les paquets inutiles** à l'exécution.
 
-#### Correction
+#### Image Web : correction
 
 L'image officielle `php:8.2-apache` conserve tous les outils de compilation (`$PHPIZE_DEPS` : `gcc`, `g++`, `make`, `autoconf`…, plus `libc6-dev` et `linux-libc-dev`) pour pouvoir compiler des extensions. Une fois `pdo_mysql` et `mysqli` compilées, ils ne servent plus et augmentent la surface d'attaque. Ils sont supprimés dans la même instruction `RUN` que la compilation :
 
@@ -362,7 +377,7 @@ RUN docker-php-ext-install pdo_mysql mysqli \
 
 En plus de réduire les vulnérabilités, un attaquant qui prendrait le contrôle du conteneur ne disposerait plus d'un compilateur.
 
-#### Après correction
+#### Image Web : après correction
 
 ```
 docker-php-articles-web:apres-j3 (debian 13.7)
@@ -378,6 +393,56 @@ Total: 59 (HIGH: 58, CRITICAL: 1)
 La vulnérabilité critique restante (`CVE-2026-6653`, `libxml2`) n'a pas encore de correctif publié par Debian, et `libxml2` est nécessaire à PHP : elle ne peut pas être supprimée. Elle disparaîtra en reconstruisant l'image quand Debian publiera le correctif (le pipeline CI reconstruit l'image à chaque push).
 
 Rapports complets : `docs/rapport/sorties/5-trivy-avant-j3.txt` et `5-trivy-apres-j3.txt`.
+
+#### Image de la base de données
+
+Même scan sur `nellotsuka/docker-php-articles-db:latest` :
+
+```
+nellotsuka/docker-php-articles-db:latest (oracle 9.8)    oracle       0
+usr/lib/mysqlsh/.../certifi-2026.2.25                    python-pkg   1
+usr/lib/mysqlsh/.../cryptography-46.0.5                  python-pkg   3
+usr/lib/mysqlsh/.../pyopenssl-25.3.0                     python-pkg   1
+usr/lib/mysqlsh/.../urllib3-2.6.3                        python-pkg   4
+usr/local/bin/gosu                                       gobinary    26
+
+Python (python-pkg)  Total: 9 (HIGH: 8, CRITICAL: 1)
+gosu (gobinary)      Total: 26 (HIGH: 25, CRITICAL: 1)
+```
+
+Le système (Oracle Linux 9.8) n'a aucune vulnérabilité. Elles viennent de deux composants ajoutés par l'image officielle `mysql:8.4` :
+
+- **MySQL Shell** (`/usr/lib/mysqlsh`, 467 Mo) : outil d'administration en ligne de commande, qui embarque ses propres paquets Python. Il n'est utilisé ni par le serveur ni par le point d'entrée. Il est donc supprimé dans le Dockerfile :
+
+```dockerfile
+RUN rpm -e --nodeps mysql-shell && rm -rf /var/cache/dnf /var/cache/yum
+```
+
+- **gosu** : sert au point d'entrée pour passer de `root` à l'utilisateur `mysql` avant de lancer le serveur. Il est indispensable et ne peut pas être supprimé. La faille critique (`CVE-2025-68121`) se trouve dans la bibliothèque TLS de Go, que `gosu` n'utilise pas (il ne fait aucune connexion réseau). Elle sera corrigée quand l'image officielle `mysql:8.4` sera reconstruite avec une version récente de `gosu`.
+
+Après correction :
+
+```
+docker-php-articles-db:sans-mysqlsh (oracle 9.8)   oracle      0
+usr/local/bin/gosu                                 gobinary   26
+
+Total: 26 (HIGH: 25, CRITICAL: 1)
+```
+
+| Image `db` | CRITICAL | HIGH | Total |
+|---|---|---|---|
+| Avant | 2 | 33 | 35 |
+| Après | 1 | 25 | 26 |
+
+La stack a été relancée avec cette image : `db` et `web` sont `healthy` et l'ajout d'un article fonctionne.
+
+```
+$ docker exec db sh -c 'command -v mysqlsh || echo "mysqlsh absent"; mysql --version'
+mysqlsh absent
+mysql  Ver 8.4.13 for Linux on x86_64 (MySQL Community Server - GPL)
+```
+
+Rapports complets : `docs/rapport/sorties/5-trivy-db-avant.txt` et `5-trivy-db-apres.txt`.
 
 ### Mesures de sécurité de l'image Web
 
@@ -486,7 +551,7 @@ Seuls le code PHP, le script SQL et les deux fichiers de configuration du servic
 
 ### Vérification avec la stack complète
 
-L'image optimisée a été testée avec le `docker-compose.yml` du projet (port déplacé sur `8095` pour le test, le port `8080` étant déjà utilisé sur la machine de test) :
+L'image optimisée a été testée avec le `docker-compose.yml` du projet :
 
 ```
 $ docker compose ps
@@ -678,8 +743,7 @@ Docker Compose version v2.40.3-desktop.1
 Préparation de la machine avant le test :
 
 - les images `nellotsuka/docker-php-articles-web:latest` et `-db:latest` présentes en local ont été supprimées (`docker rmi`), pour que le `pull` les télécharge réellement ;
-- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait ;
-- le port `8080` était utilisé par le conteneur d'un autre projet, arrêté pendant le test.
+- aucun conteneur `web`/`db`, volume `db-data` ou réseau `app-network` n'existait.
 
 ### Clonage et configuration
 
@@ -734,7 +798,7 @@ web    nellotsuka/docker-php-articles-web:latest   Up 25 seconds (healthy)   0.0
 ```
 
 - L'image `web` (couche unique de 62,6 Mo, partie 6) est entièrement téléchargée.
-- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine, utilisée pour les TP.
+- Pour `db`, seule la dernière couche (le script SQL) est téléchargée : les couches de `mysql:8.4` étaient déjà présentes sur la machine.
 - `--no-build` garantit que Compose utilise les images de Docker Hub et ne reconstruit rien, même si le `docker-compose.yml` contient une section `build`.
 
 ### Utilisation de l'application
@@ -777,21 +841,3 @@ web    nellotsuka/docker-php-articles-web:latest   Up 21 seconds (healthy)   0.0
 ```
 
 `docker compose down` supprime les conteneurs et le réseau, mais pas le volume `db-data` : l'article créé avant l'arrêt est toujours affiché après le redémarrage.
-
-Nettoyage final : `docker compose down -v`, qui supprime aussi le volume.
-
-### Erreurs rencontrées
-
-Aucune.
-
-## 9. Difficultés rencontrées
-
-| Problème | Cause | Solution retenue |
-|---|---|---|
-| Le code fourni ne se connectait pas à la base | Hôte `localhost` et identifiants `test/test` codés en dur dans `db-config.php` | Lecture de `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` depuis l'environnement (partie 2.1) |
-| La version d'Apache restait visible malgré `ServerTokens Prod` | `security.conf` de Debian, chargé après notre fichier, remettait la valeur par défaut | Fichier renommé `zz-security-hardening.conf` pour être chargé en dernier |
-| L'en-tête `X-Powered-By` restait présent | `expose_php` vaut `On` même dans `php.ini-production` | Fichier `zz-security.ini` avec `expose_php = Off` |
-| Apache en non-root ne pouvait pas écouter sur le port 80 | Avec `USER www-data`, la capability `NET_BIND_SERVICE` ajoutée par `cap_add` n'est pas transmise au processus, et `no-new-privileges` empêche `setcap` | `sysctl net.ipv4.ip_unprivileged_port_start=0` dans le Compose, en gardant `cap_drop: ALL` |
-| La suppression des outils de compilation ne réduisait pas la taille de l'image | Un fichier supprimé reste stocké dans la couche de l'image de base | Multi-stage avec `FROM scratch` + `COPY --from=build / /` : 176 → 63 Mo (partie 6) |
-| `ping` absent du conteneur Web | Non installé dans l'image officielle | Test réseau fait avec `getent hosts db` et une connexion TCP vers `db:3306`, sans alourdir l'image (partie 4) |
-| Caractères accentués cassés dans certains fichiers | Encodage par défaut de PowerShell sous Windows | Fichiers réécrits en UTF-8 |
