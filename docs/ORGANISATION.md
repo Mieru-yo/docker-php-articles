@@ -220,5 +220,4 @@ Format : `type(portée): description courte`, en anglais.
 | Question | À trancher avant | Proposition |
 |---|---|---|
 
-| Format de la démo (pas de soutenance orale) | Phase 4 | Demander à l'enseignant : vidéo courte de la stack, ou captures dans le rapport. |
 | Service `adminer` (optionnel) | Phase 2 | Yann l'ajoute au Compose s'il a le temps, sur le réseau `app-network`, port `8081`. |
